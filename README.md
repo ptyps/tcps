@@ -1,4 +1,49 @@
-Example
+Server Example
+
+```cpp
+#include "tcps.hpp"
+
+#include <thread>
+
+int main() {
+  tcps::enableDebug();
+  tcp::enableDebug();
+  ssl::enableDebug();
+  net::enableDebug();
+
+  auto key = std::string("/path/to/privkey.pem");
+  auto cert = std::string("/path/to/cert.pem");
+  
+  auto srv = tcps::Server(cert, key);
+
+  srv.bind(6697, "localhost");
+
+  while (!0) {
+    auto inc = srv.accept();
+
+    auto thread = std::thread([&]() {
+      while (!0) {
+        auto vari = inc->recv();
+
+        if (pstd::has<tcps::event>(vari)) {
+          break;
+        }
+
+        else {
+          auto recvd = std::get<std::string>(vari);
+          pstd::log(recvd);
+        }
+      }
+
+      delete inc;
+    });
+
+    thread.detach();
+  }
+}
+```
+
+Client Example
 
 ```cpp
 #include "tcps.hpp"
