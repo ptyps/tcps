@@ -53,10 +53,13 @@ namespace tcps {
       }
 
     public:
-      ~Socket() {
-        log("destroying ssl socket %i", id);
+      void operator delete(void* ptr) {
+        log("delete operator called");
 
-        std::free(sid);
+        auto us = static_cast<Socket*>(ptr);
+
+        std::free(us->sid);
+        std::free(us->ai);
       }
 
       Socket() : tcp::Socket() {
@@ -149,7 +152,7 @@ namespace tcps {
         if (a == ssl::status::FAIL)
           throw exception("unable to accept ssl client");
 
-        return Socket(csid, pair);
+        return new Socket(csid, pair);
       }
   };
 }
