@@ -47,9 +47,20 @@ namespace tcps {
     private:
       SSL* sid;
 
-    public:
-      Socket() : tcp::Socket() {
+      // used by Server
+      Socket(SSL* sid, std::pair<uint, addrinfo*> pair) : sid(sid), tcp::Socket(pair) {
+        log("socket created by server");
+      }
 
+    public:
+      ~Socket() {
+        log("destroying ssl socket %i", id);
+
+        std::free(sid);
+      }
+
+      Socket() : tcp::Socket() {
+        log("creating socket");
       }
 
       status connect(uint16_t port, pstd::vstring host, net::family family = net::family::Unspecified) {
@@ -58,7 +69,7 @@ namespace tcps {
         if (s == tcp::status::FAIL)
           return status::FAIL;
 
-        sid = ssl::wrapOutgoing(id);
+        sid = ssl::wrap::out(id);
 
         auto c = ssl::connect(sid);
 
@@ -92,7 +103,53 @@ namespace tcps {
       }
   };
 
-  class Server {
+  class Server : public tcp::Server {
+    private:
+      pstd::vstring cert;
+      pstd::vstring key;
+      SSL_CTX* ctx;
+      SSL* sid;
 
+    public:
+      static void *operator new      (size_t) = delete;
+      static void *operator new[]    (size_t) = delete;
+
+      Server(pstd::vstring cert, pstd::vstring key) : cert(cert), key(key), tcp::Server() {
+        log("creating server");
+      }
+
+      status bind(uint16_t port, pstd::vstring host, net::family family = net::family::Unspecified) {
+        auto b = tcp::Server::bind(port, host, family);
+
+        if (b == tcp::status::FAIL)
+          return status::FAIL;
+
+        auto pair = ssl::wrap::server(id);
+
+        sid = std::move(pair.second);
+        ctx = std::move(pair.first);
+
+        ssl::loadPEMCert(ctx, cert, key);
+
+        return status::OK;
+      }
+
+      auto accept() {
+        auto i = net::listen(id);
+
+        if (i == net::status::FAIL)
+          throw exception("unable to listen");
+
+        auto pair = net::accept(id, ai);
+
+        auto csid = ssl::wrap::in(pair.first, ctx);
+
+        auto a = ssl::accept(csid);
+
+        if (a == ssl::status::FAIL)
+          throw exception("unable to accept ssl client");
+
+        return Socket(csid, pair);
+      }
   };
 }
